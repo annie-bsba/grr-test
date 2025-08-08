@@ -8,18 +8,15 @@ pipeline {
             }
         }
 
-        stage('Install Dependencies') {
-            steps {
-                sh 'python3 -m venv venv'
-                sh './venv/bin/activate'
-                sh 'pip install flask'
-            }
-        }
+        
 
         stage('Deploy') { 
             steps {
                 echo 'Deploying to server...'
-                // Example: Deploy using scp or rsync to a remote server
+                sh """
+                scp -r /var/lib/jenkins/grr-test ubuntu1@10.4.0.10:/dstp
+                python3 /dstp/grr-test/app.py
+                """
             }
         }
     }
