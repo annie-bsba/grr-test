@@ -11,6 +11,7 @@ pipeline {
         stage('Install Dependencies') {
             steps {
                 sh 'python3 -m venv venv'
+                sh 'source venv/bin/activate'
                 sh 'pip install flask'
             }
         }
