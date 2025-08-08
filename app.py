@@ -5,7 +5,7 @@ app = Flask(__name__)
 app.secret_key = 'topsecretkey'  # Use env vars in production
 
 USERNAME = 'admin'
-PASSWORD = 'surveillance123'
+PASSWORD = 'P@ssw0rd'
 
 @app.route('/')
 def index():
