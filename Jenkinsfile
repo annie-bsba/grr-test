@@ -2,7 +2,7 @@ pipeline {
   agent any
   environment {
     REPO_URL = 'git@github.com:annie-bsba/grr-test.git'   // <-- your repo
-    SECRET_IP = '10.4.0.10'                               // Secret server
+    SECRET_IP = '192.168.169.145'                               // Secret server
     SSH_OPTS = '-o StrictHostKeyChecking=no'
     TARGET_USER = 'ubuntu1'
     APP_DIR = '/opt/secretapp'
