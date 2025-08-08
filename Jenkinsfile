@@ -2,11 +2,11 @@ pipeline {
   agent any
 
   environment {
+    REPO_URL    = 'git@github.com:annie-bsba/grr-test.git'
     SECRET_IP   = '192.168.169.145'
     TARGET_USER = 'ubuntu1'
     APP_DIR     = '/opt/secret_app'
-    STAGE_DIR   = '/tmp/secret_stage'          // world-readable, no home perms issue
-    REPO_URL    = 'git@github.com:annie-bsba/grr-test.git'
+    STAGE_DIR   = '/tmp/secret_stage'
   }
 
   stages {
@@ -35,13 +35,15 @@ pipeline {
             SSH="ssh -o StrictHostKeyChecking=no ${TARGET_USER}@${SECRET_IP}"
             SCP="scp -o StrictHostKeyChecking=no"
 
-            # users/dirs/tools
+            # create users/dirs and ensure stage dir is writable by ubuntu1
             echo "$SUDO_PASS" | $SSH -tt sudo -S useradd -m -s /bin/bash secret || true
             echo "$SUDO_PASS" | $SSH -tt sudo -S mkdir -p ${APP_DIR} ${STAGE_DIR}
+            echo "$SUDO_PASS" | $SSH -tt sudo -S chown ${TARGET_USER}:${TARGET_USER} ${STAGE_DIR}
+            echo "$SUDO_PASS" | $SSH -tt sudo -S chmod 1777 ${STAGE_DIR}
             echo "$SUDO_PASS" | $SSH -tt sudo -S apt-get update
             echo "$SUDO_PASS" | $SSH -tt sudo -S apt-get install -y python3-venv rsync
 
-            # stage code to /tmp (as ubuntu1)
+            # stage code to /tmp as ubuntu1 (correct rsync -e syntax)
             rsync -az --delete -e 'ssh -o StrictHostKeyChecking=no' ./ ${TARGET_USER}@${SECRET_IP}:${STAGE_DIR}/
 
             # move into app dir as root, set owner to secret
@@ -52,7 +54,7 @@ pipeline {
             echo "$SUDO_PASS" | $SSH -tt "sudo -S -u secret ${APP_DIR}/venv/bin/pip install -U pip"
             echo "$SUDO_PASS" | $SSH -tt "sudo -S -u secret ${APP_DIR}/venv/bin/pip install -r ${APP_DIR}/requirements.txt || true"
 
-            # systemd unit (idempotent)
+            # drop systemd unit and enable service
             cat > secretapp.service <<'EOF'
 [Unit]
 Description=BigBucks Secret App
