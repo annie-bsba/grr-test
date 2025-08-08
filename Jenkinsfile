@@ -2,10 +2,10 @@ pipeline {
   agent any
 
   environment {
-    REPO_URL   = 'git@github.com:annie-bsba/grr-test.git'
-    SECRET_IP  = '192.168.169.145'   // Secret's bridged IP
-    TARGET_USER= 'ubuntu1'
-    APP_DIR    = '/opt/secret_app'
+    REPO_URL    = 'git@github.com:annie-bsba/grr-test.git'
+    SECRET_IP   = '192.168.169.145'        // Secret server bridged IP
+    TARGET_USER = 'ubuntu1'
+    APP_DIR     = '/opt/secret_app'
   }
 
   stages {
@@ -16,7 +16,7 @@ pipeline {
     stage('Build') {
       steps {
         sh '''
-          set -eux
+          set -eu
           test -f app.py
           test -f requirements.txt
           echo "Structure OK"
@@ -31,33 +31,30 @@ pipeline {
     stage('Deploy') {
       steps {
         withCredentials([string(credentialsId: 'sudo-pass', variable: 'SUDO_PASS')]) {
-          // NOTE: triple-single quotes => no Groovy interpolation; $vars expand in the shell
           sh '''
-            set -euxo pipefail
+            set -eu
 
             SSH="ssh -o StrictHostKeyChecking=no ${TARGET_USER}@${SECRET_IP}"
+            SCP="scp -o StrictHostKeyChecking=no"
 
-            # helper to run remote sudo commands with password via stdin and a TTY
-            sudocmd() { ${SSH} -tt "sudo -S -p '' $*" <<< "${SUDO_PASS}"; }
+            # ensure target user + dirs + tools (sudo via stdin)
+            echo "$SUDO_PASS" | $SSH -tt "sudo -S useradd -m -s /bin/bash secret || true"
+            echo "$SUDO_PASS" | $SSH -tt "sudo -S mkdir -p ${APP_DIR}"
+            echo "$SUDO_PASS" | $SSH -tt "sudo -S chown -R secret:secret ${APP_DIR}"
+            echo "$SUDO_PASS" | $SSH -tt "sudo -S apt-get update"
+            echo "$SUDO_PASS" | $SSH -tt "sudo -S apt-get install -y python3-venv rsync"
 
-            # prepare target
-            sudocmd useradd -m -s /bin/bash secret || true
-            sudocmd mkdir -p ${APP_DIR}
-            sudocmd chown -R secret:secret ${APP_DIR}
-            sudocmd apt-get update
-            sudocmd apt-get install -y python3-venv rsync
-
-            # venv (as unprivileged user)
-            ${SSH} "sudo -u secret bash -lc 'cd ${APP_DIR} && [ -d venv ] || python3 -m venv venv'"
+            # venv as unprivileged user
+            $SSH "sudo -u secret sh -lc 'cd ${APP_DIR} && [ -d venv ] || python3 -m venv venv'"
 
             # sync source
             rsync -az --delete -e 'ssh -o StrictHostKeyChecking=no' ./ ${TARGET_USER}@${SECRET_IP}:${APP_DIR}/
 
-            # deps
-            ${SSH} "sudo -u secret ${APP_DIR}/venv/bin/pip install -r ${APP_DIR}/requirements.txt || true"
+            # install deps
+            $SSH "sudo -u secret ${APP_DIR}/venv/bin/pip install -r ${APP_DIR}/requirements.txt || true"
 
-            # systemd unit
-            sudocmd bash -lc 'cat >/etc/systemd/system/secretapp.service <<EOF
+            # write systemd unit locally
+            cat > secretapp.service <<'EOF'
 [Unit]
 Description=BigBucks Secret App
 After=network.target
@@ -70,11 +67,15 @@ Restart=always
 [Install]
 WantedBy=multi-user.target
 EOF
-systemctl daemon-reload
-systemctl restart secretapp || systemctl start secretapp'
 
-            # show status (don’t fail pipeline if non-zero)
-            sudocmd systemctl status --no-pager secretapp || true
+            # copy unit to server and activate
+            $SCP secretapp.service ${TARGET_USER}@${SECRET_IP}:~/secretapp.service
+            echo "$SUDO_PASS" | $SSH -tt "sudo -S mv ~/secretapp.service /etc/systemd/system/secretapp.service"
+            echo "$SUDO_PASS" | $SSH -tt "sudo -S systemctl daemon-reload"
+            echo "$SUDO_PASS" | $SSH -tt "sudo -S systemctl restart secretapp || sudo -S systemctl start secretapp"
+
+            # show status (non-fatal)
+            echo "$SUDO_PASS" | $SSH -tt "sudo -S systemctl status --no-pager secretapp" || true
           '''
         }
       }
