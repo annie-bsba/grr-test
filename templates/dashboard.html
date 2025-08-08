@@ -1,0 +1,20 @@
+{% extends "layout.html" %}
+{% block title %}Dashboard | BigBucks{% endblock %}
+{% block content %}
+<h1 class="title">Surveillance Dashboard</h1>
+<p class="right"><a class="btn" href="{{ url_for(logout) }}">Logout</a></p>
+<table class="log-table">
+  <thead>
+    <tr><th>Timestamp</th><th>IP Address</th><th>Activity</th></tr>
+  </thead>
+  <tbody>
+  {% for log in logs %}
+    <tr>
+      <td>{{ log.timestamp.strftime("%Y-%m-%d %H:%M:%S") }}</td>
+      <td>{{ log.ip }}</td>
+      <td>{{ log.activity }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
