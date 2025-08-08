@@ -14,7 +14,7 @@ pipeline {
             steps {
                 echo 'Deploying to server...'
                 sh """
-                scp -r /var/lib/jenkins/grr-test ubuntu1@10.4.0.10:/dstp
+                scp -r /var/lib/jenkins/grr-test ubuntu1@192.168.60.10:/dstp
                 python3 /dstp/grr-test/app.py
                 """
             }
